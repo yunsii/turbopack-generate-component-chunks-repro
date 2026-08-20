@@ -225,6 +225,18 @@ conditions all had to hold; removing any one made it disappear:
   while investigating. This repro keeps minify **on**.
 - **Not a missing/404 chunk.** Both builds request the same assets successfully.
 
+## Versions verified
+
+| version | reproduces | one-line fix (applied to the built output) |
+|---|---|---|
+| `next@16.3.0` (pinned in this repo) | yes — `/p0`, `/p1` not hydrated | fixes it |
+| `next@16.3.1-canary.25` | yes — identical numbers: `registered: ['/_app']`, 312 factories, 115 instantiated | fixes it |
+
+The affected source file is **byte-identical** between `v16.3.0` and `canary`
+(`turbopack/crates/turbopack-ecmascript-runtime/js/src/browser/runtime/dom/runtime-backend-dom.ts`).
+
+To check on canary yourself: `pnpm add next@canary && MERGE=1 pnpm build && pnpm start`.
+
 ## Environment
 
 - `next@16.3.0`, `react@18.2.0`, `react-dom@18.2.0`, Pages Router, `output: 'standalone'`
