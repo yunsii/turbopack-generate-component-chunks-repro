@@ -1,0 +1,25 @@
+{
+  "name": "turbopack-merged-module-repro",
+  "private": true,
+  "scripts": {
+    "build": "next build",
+    "start": "next start -p 3999"
+  },
+  "dependencies": {
+    "@ant-design/cssinjs": "1.24.0",
+    "@repro/ui": "link:./packages/ui",
+    "antd": "5.28.0",
+    "lodash-es": "^4.18.1",
+    "next": "16.3.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "@lingui/core": "6.2.0",
+    "@lingui/react": "6.2.0",
+    "@lingui/swc-plugin": "^6.6.0",
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.18",
+    "typescript": "7.0.2"
+  }
+}
