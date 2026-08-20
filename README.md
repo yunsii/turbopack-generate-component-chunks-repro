@@ -12,6 +12,12 @@ The failure is **completely silent**: the server-rendered HTML is complete, ever
 asset request succeeds, the console has **no errors or warnings** — the page simply
 never becomes interactive. Waiting is a legal state, so nothing reports anything.
 
+**Root cause is identified and a one-line runtime fix is verified** — see
+[Root cause](#root-cause) and [Fix](#fix). In short: the entry chunk lists a sibling chunk
+in `otherChunks` that is never injected into the document (its modules were duplicated into
+another chunk that is), and `doLoadChunk` short-circuits JS runtime dependencies without
+loading them — so that chunk's resolver never resolves and the entry is never instantiated.
+
 ## Reproduce
 
 ```bash
@@ -88,7 +94,81 @@ sibling chunks its entry-carrying chunk must await:
 All seven pages hydrate in the `MERGE=0` build. The threshold sits between 50 and 63
 in this project.
 
-## Where it goes wrong
+## Root cause
+
+The awaited promise in `registerChunk` never settles, and the reason is a single branch in
+`doLoadChunk` (unminified names):
+
+```js
+function doLoadChunk(sourceType, url) {
+  const resolver = getOrCreateResolver(url)
+  if (resolver.loadingStarted) return resolver.promise
+  if (sourceType === SourceType.Runtime) {
+    resolver.loadingStarted = true
+    if (isCss(url)) resolver.resolve()   // CSS resolves right away
+    return resolver.promise              // JS: returns without loading anything
+  }
+  // …normal path: reuse an existing <script src=…> if present, otherwise create and append one
+}
+```
+
+For a **JS chunk requested as a runtime dependency**, the runtime marks it as "loading
+started" and returns — it never inserts a script. The implicit assumption is that such a
+chunk is always already present in the document as `<script defer>`, so it will register
+itself and resolve the resolver.
+
+`generateComponentChunks: true` breaks that assumption. Traced on `/p0`:
+
+- the entry-carrying chunk lists `static/chunks/32b41v3x3bmf1.js` in its `otherChunks`
+- that file **exists** in the build output and serves 200
+- it is **not** referenced anywhere in the HTML
+- it was **never requested** (0 network requests) and no `<script>` element for it exists
+- its resolver is stuck at `{ loadingStarted: true, resolved: false }` — forever
+- the module it would provide (`711138`) is **already registered**, because component-level
+  chunking duplicated it into `static/chunks/1gtj_3nz9_l8s.js`, which *is* in the HTML
+
+So the chunk is redundant, nobody loads it, nothing resolves it, and
+`await Promise.all(otherChunks …)` in `registerChunk` blocks forever — with no error,
+because a pending promise is not a failure.
+
+This also explains the width threshold: the wider the chunk graph, the more likely it
+contains a chunk that is referenced as a runtime dependency yet never injected.
+
+## Fix
+
+Two places this can be fixed; the runtime one is verified here.
+
+**Runtime (verified).** Don't short-circuit JS runtime dependencies — let them fall through
+to the normal find-or-insert path:
+
+```diff
+-if (sourceType === SourceType.Runtime)
+-  return resolver.loadingStarted = true, isCss(url) && resolver.resolve(), resolver.promise
++if (sourceType === SourceType.Runtime && isCss(url))
++  return resolver.loadingStarted = true, resolver.resolve(), resolver.promise
+```
+
+The normal path already reuses an existing `<script>` when there is one, so this only
+changes behaviour for the case that is currently broken.
+
+Validated by patching a built output — same artifacts, only this line differs
+(`node debug/patch-runtime-fix.mjs .next`):
+
+| page | unpatched | patched |
+|---|---|---|
+| `/p0` | not hydrated | **hydrated** |
+| `/p1` | not hydrated | **hydrated** |
+| `/p4` | hydrated | hydrated (unchanged) |
+
+Cost and safety: the patched build issues exactly **one** additional chunk request
+(52 vs 51 on `/p0`) — the previously orphaned chunk — with **zero duplicate requests** and
+**zero JS exceptions**.
+
+**Build side (not attempted here).** Arguably the real defect: a chunk should not appear in
+another chunk's `otherChunks` if it is never injected into the document — or, if its modules
+are already provided by a duplicate chunk, it should not be listed as a dependency at all.
+
+## Where it goes wrong (call path)
 
 `BACKEND.registerChunk` in the Turbopack browser runtime
 (`next/dist/.../turbopack-<hash>.js`, unminified for readability):
