@@ -605,6 +605,38 @@ const SHARED_SUM = fn488(0) + fn1115(0) + fn268(0) + fn758(0) + fn971(0) + fn119
 
 export default function App({ Component, pageProps }: AppProps) {
   const [ready, setReady] = useState(false)
+  const [clicks, setClicks] = useState(0)
   useEffect(() => setReady(true), [])
-  return <div data-app={ready ? 'yes' : 'no'} data-sum={SHARED_SUM}><Component {...pageProps} /></div>
+
+  // A visible hydration indicator: `ready` can only flip in an effect, so it stays
+  // "NOT HYDRATED" for as long as the page never hydrates. The button proves
+  // interactivity independently.
+  const bar: React.CSSProperties = {
+    position: 'fixed', top: 0, left: 0, right: 0, zIndex: 99999,
+    padding: '14px 20px', font: '600 18px/1.4 ui-monospace, monospace',
+    color: '#fff', background: ready ? '#116b3a' : '#8c1c13',
+    display: 'flex', gap: 16, alignItems: 'center',
+  }
+
+  return (
+    <div data-app={ready ? 'yes' : 'no'} data-sum={SHARED_SUM}>
+      <div style={bar}>
+        <span>{ready ? '✅ HYDRATED' : '❌ NOT HYDRATED'}</span>
+        <button
+          onClick={() => setClicks((c) => c + 1)}
+          style={{ font: 'inherit', padding: '6px 14px', cursor: 'pointer' }}
+        >
+          clicked {clicks} times
+        </button>
+        <span style={{ opacity: 0.8, fontWeight: 400, fontSize: 14 }}>
+          {ready
+            ? 'React attached; the button works.'
+            : 'Server HTML only. The button does nothing. No console errors.'}
+        </span>
+      </div>
+      <div style={{ paddingTop: 64 }}>
+        <Component {...pageProps} />
+      </div>
+    </div>
+  )
 }

@@ -32,6 +32,14 @@ MERGE=0 pnpm build && pnpm start
 #   http://localhost:3999/p0  -> works
 ```
 
+Every page carries a banner that makes the outcome visible without opening DevTools: it
+renders red **NOT HYDRATED** in the server HTML and only turns green **HYDRATED** from an
+effect, so it stays red for as long as the page never hydrates. The button beside it counts
+clicks and does nothing while the page is unhydrated.
+
+Within a single `MERGE=1` build you can see both outcomes side by side: `/p0` stays red
+while `/p4` turns green — the threshold behaviour in visible form.
+
 > Serve each build from its own directory (or delete `.next` between runs and restart
 > `next start`). Swapping `.next` under a running server produces buildId-mismatch
 > 404s that look like the bug but are not.
